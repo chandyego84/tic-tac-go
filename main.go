@@ -1,99 +1,50 @@
 package main
-
 import (
 	"fmt"
-	"html/template"
-	"log"
 	"net/http"
-	"os"
-	"regexp"
+	"github.com/gorilla/websocket"
 )
 
-type Page struct {
-	Title string
-	Body  []byte
+/*
+* Upgrades an HTTP connection to a websocket
+*/
+var upgrader = websocket.Upgrader {
+	// allow all connections (in prod, should validate origin to avoid cross-site websocket hijacking)
+	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-var templates = template.Must(template.ParseFiles("edit.html", "view.html")) // parse files into a single *Template
-var validPath = regexp.MustCompile("^/(edit|save|view)/([a-zA-Z0-9]+)$")
-
-/***************/
-/*** HANDLERS ***/
-/***************/
-func viewHandler(w http.ResponseWriter, r *http.Request, title string) {
-	p, err := loadPage(title)
-    if err != nil {
-        http.Redirect(w, r, "/edit/"+title, http.StatusFound)
-        return
-    }
-    renderTemplate(w, "view", p)
-}
-
-func editHandler(w http.ResponseWriter, r *http.Request, title string) {
-	p, err := loadPage(title)
-	if (err != nil) {
-		p = &Page{Title: title}
-	}
-	renderTemplate(w, "edit", p)
-}
-
-func saveHandler(w http.ResponseWriter, r *http.Request, title string) {
-	body := r.FormValue("body") // FormValue returns a string
-	p := &Page{Title: title, Body: []byte(body)} // convert body into []byte
-	err := p.save()
-	if (err != nil) {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-
-	http.Redirect(w, r, "/view/"+title, http.StatusFound)
-}
-
-func makeHandler(fn func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
-    return func(w http.ResponseWriter, r *http.Request) { // closure fxn: encloses values defined outside by it
-        m := validPath.FindStringSubmatch(r.URL.Path)
-        if m == nil {
-            http.NotFound(w, r)
-            return
-        }
-        fn(w, r, m[2])
-    }
-}
-/***************/
-/*** HANDLERS END ***/
-/***************/
-
-/***************/
-/*** HELPERS ***/
-/***************/
-func renderTemplate(w http.ResponseWriter, tmpl string, p *Page) {
-	err := templates.ExecuteTemplate(w, tmpl+".html", p)
-	if (err != nil) {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-}
-
-func loadPage(title string) (*Page, error) {
-	filename := title + ".txt"
-	body, err := os.ReadFile(filename)
+func handleConnections(w http.ResponseWriter, r *http.Request) {
+	// upgrade GET request to websocket
+	ws, err := upgrader.Upgrade(w, r, nil)
 	if (err != nil) {
 		fmt.Println(err.Error())
-		return nil, err
+		return
 	}
+	defer ws.Close() // stupid language
 
-	return &Page{Title: title, Body: body}, nil
-}
+	for { // read/write loop -- read messages from client and echo them back
+		// read msgs from browser
+		_, msg, err := ws.ReadMessage()
+		if (err != nil) {
+			fmt.Println("read error: ", err.Error())
+			break
+		}
+		fmt.Printf("Received: %s\n", msg)
 
-func (p *Page) save() error {
-	filename := p.Title + ".txt"
-	return os.WriteFile(filename, p.Body, 0600)
+		// write msg back to browser
+        if err := ws.WriteMessage(websocket.TextMessage, msg); err != nil { 
+            fmt.Println("write error:", err)
+            break
+        }
+	}
 }
-/***************/
-/*** HELPERS END ***/
-/***************/
 
 func main() {
-	http.HandleFunc("/view/", makeHandler(viewHandler))
-	http.HandleFunc("/edit/", makeHandler(editHandler))
-	http.HandleFunc("/save/", makeHandler(saveHandler))
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	http.HandleFunc("/ws", handleConnections)
+
+	fmt.Println("Websocket server started on :8080")
+	err := http.ListenAndServe(":8080", nil)
+	if (err != nil) {
+		fmt.Println("ListenAndServe: ", err.Error())
+	}
 }
