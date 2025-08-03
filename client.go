@@ -9,6 +9,8 @@ import (
 	"log"
 	"net/http"
 	"time"
+	"math/rand"
+	"strconv" 
 
 	"github.com/gorilla/websocket"
 )
@@ -44,8 +46,17 @@ type Client struct {
 	// The websocket connection.
 	conn *websocket.Conn
 
+	// name of peer
+	clientName string
+
 	// Buffered channel of outbound messages.
 	send chan []byte
+}
+
+type Message struct {
+	user string
+
+	message string
 }
 
 // readPump pumps messages from the websocket connection to the hub.
@@ -69,8 +80,9 @@ func (c *Client) readPump() {
 			}
 			break
 		}
-		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
-		c.hub.broadcast <- message
+		msg := newMessage(c.clientName, string(message))
+		outMessage := bytes.TrimSpace([]byte(msg.user + ": " + msg.message))
+		c.hub.broadcast <- outMessage
 	}
 }
 
@@ -120,6 +132,13 @@ func (c *Client) writePump() {
 	}
 }
 
+func newMessage(user string, message string) *Message {
+	return &Message{
+		user: user,
+		message: message,
+	}
+}
+
 // serveWs handles websocket requests from the peer.
 func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
@@ -127,8 +146,10 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 		return
 	}
-	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256)}
-	client.hub.register <- client
+
+	client_num := strconv.Itoa(rand.Int())
+	client := &Client{hub: hub, conn: conn, clientName: "user" + client_num, send: make(chan []byte, 256)}
+	client.hub.register <- client // send client to hub's register channel
 
 	// Allow collection of memory referenced by the caller by doing all work in
 	// new goroutines.

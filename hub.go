@@ -26,19 +26,22 @@ type Hub struct {
 
 func newHub() *Hub {
 	return &Hub{
+		clients:    make(map[*Client]bool),
 		broadcast:  make(chan []byte),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
-		clients:    make(map[*Client]bool),
 	}
 }
 
+/*
+(Goroutine) Waits on multiple communication operations (channels)
+*/
 func (h *Hub) run() {
 	for {
 		select {
 		case client := <-h.register:
 			h.clients[client] = true
-			fmt.Println("New client connected. Total clients:", len(h.clients))
+			fmt.Printf("New client %s connected. Total clients: %d\n", client.clientName ,len(h.clients))
 		case client := <-h.unregister:
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
