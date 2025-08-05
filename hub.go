@@ -41,9 +41,10 @@ func (h *Hub) run() {
 		select {
 		case client := <-h.register:
 			h.clients[client] = true
-			fmt.Printf("New client %s connected. Total clients: %d\n", client.clientName ,len(h.clients))
+			fmt.Printf("New client %s connected. Total clients: %d\n", client.clientName, len(h.clients))
 		case client := <-h.unregister:
 			if _, ok := h.clients[client]; ok {
+				fmt.Printf("Client %s disconnected.\n", client.clientName)
 				delete(h.clients, client)
 				close(client.send)
 			}
