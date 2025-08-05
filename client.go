@@ -171,7 +171,7 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client_num := strconv.Itoa(rand.Int())
+	client_num := strconv.Itoa(rand.Int()) // generate random user number for client name
 	client := &Client{hub: hub, conn: conn, clientName: "user" + client_num, send: make(chan []byte, 256)}
 	client.hub.register <- client // send client to hub's register channel
 
