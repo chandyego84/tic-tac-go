@@ -5,7 +5,8 @@
 package main
 
 import (
-	"bytes"
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -48,6 +49,19 @@ type Client struct {
 	send chan []byte
 }
 
+// Message contains information about the chat or pertinent game data from the client
+type Message struct {
+	Type string // "chat" or "move"
+
+	Username string // client username
+
+	ChatMessage string // chat message
+
+	Index int // move index (0-8)
+
+	Symbol string // "X" or "O"
+}
+
 // readPump reads messages from the client and sends them to the hub
 //
 // The application runs readPump in a per-connection goroutine. The application
@@ -58,10 +72,13 @@ func (c *Client) readPump() {
 		c.hub.unregister <- c
 		c.conn.Close()
 	}()
+
 	c.conn.SetReadLimit(maxMessageSize)
-	c.conn.SetReadDeadline(time.Now().Add(pongWait))
-	c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
+	c.conn.SetReadDeadline(time.Now().Add(pongWait)) // set on connection start
+	c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil }) // set every time a pong received
+	
 	for {
+		// obtain message data from client
 		_, message, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
@@ -69,8 +86,18 @@ func (c *Client) readPump() {
 			}
 			break
 		}
-		outMessage := bytes.TrimSpace([]byte(message))
-		c.hub.broadcast <- outMessage
+
+		// parse message from the client
+        var msg Message
+		err = json.Unmarshal(message, &msg)
+		if err != nil {
+			fmt.Println("JSON unmarshal error:", err)
+		} else if msg.Type == "" {
+			fmt.Println("Message type is empty")
+		}
+
+		out, _ := json.Marshal(msg)
+		c.hub.broadcast <- out
 	}
 }
 
@@ -97,7 +124,7 @@ func (c *Client) writePump() {
 		// Case 1: message ready to be sent to client
 		case message, ok := <-c.send:
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
-
+			
 			if !ok {
 				// The `c.send` channel was closed (e.g., hub unregistered the client)
 				// Send a close message to the WebSocket client
@@ -150,7 +177,7 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	}
 
 	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256)}
-	client.hub.register <- client // send client to hub's register channel
+	client.hub.register <- client 
 
 	// Allow collection of memory referenced by the caller by doing all work in
 	// new goroutines.

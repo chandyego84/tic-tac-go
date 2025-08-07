@@ -1,141 +1,288 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<title>Noob Chat</title>
-<script type="text/javascript">
-window.onload = function () {
-    var conn;
-    var msg = document.getElementById("msg");
-    var log = document.getElementById("log");
-    var username = null;
-
-    function appendLog(item) {
-        var doScroll = log.scrollTop > log.scrollHeight - log.clientHeight - 1;
-        log.appendChild(item);
-        if (doScroll) {
-            log.scrollTop = log.scrollHeight - log.clientHeight;
+    <title>Noob Chat + Tic-Tac-Toe</title>
+    <meta charset="UTF-8" />
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            font-family: sans-serif;
         }
-    }
 
-function showPopup() {
-    const popup = document.getElementById("usernamePopup");
-    popup.style.display = "block";
-    document.getElementById("usernameInput").focus();
-}
+        #container {
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+        }
 
-    function closePopup() {
-        document.getElementById("usernamePopup").style.display = "none";
-        document.getElementById("msg").focus();
-    }
+        #game {
+            width: 40%;
+            background: #f0f0f0;
+            padding: 1em;
+            box-sizing: border-box;
+            border-right: 2px solid #ccc;
+        }
 
-    // Handle username form submit
-    document.getElementById("usernameForm").onsubmit = function (e) {
-        e.preventDefault();
-        var input = document.getElementById("usernameInput");
-        if (input.value.trim() === "") return;
-        username = input.value.trim();
-        closePopup();
-    };
-    
-    document.getElementById("form").onsubmit = function () {
-        if (!conn || !msg.value || !username) return false;
-        conn.send(username + ": " + msg.value);
-        msg.value = "";
-        return false;
-    };
+        #game h2 {
+            margin-top: 0;
+        }
 
-    if (window["WebSocket"]) {
-        conn = new WebSocket("ws://" + document.location.host + "/ws");
-        conn.onopen = function (evt) {
-            showPopup(); // prompt for username
-        };
-        conn.onclose = function (evt) {
-            var item = document.createElement("div");
-            item.innerHTML = "<b>Connection closed.</b>";
+        #chat {
+            width: 60%;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            background: gray;
+        }
+
+        #log {
+            flex: 1;
+            overflow: auto;
+            background: white;
+            padding: 0.5em;
+            margin: 0.5em;
+        }
+
+        #form {
+            padding: 0.5em;
+            background: #ddd;
+            display: flex;
+            gap: 0.5em;
+        }
+
+        #msg_form {
+            flex: 1;
+        }
+
+        #board {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            grid-template-rows: repeat(3, 100px);
+            gap: 5px;
+            margin-top: 1em;
+        }
+
+        .cell {
+            width: 100px;
+            height: 100px;
+            background: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            cursor: pointer;
+            border: 1px solid #000;
+        }
+
+        #status {
+            margin-top: 1em;
+            font-weight: bold;
+        }
+
+        .popup {
+            display: none;
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            border: 1px solid #ccc;
+            z-index: 1000;
+            padding: 20px;
+        }
+
+        .popup .close {
+            cursor: pointer;
+            float: right;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="game">
+            <h2>Tic-Tac-Toe</h2>
+            <div id="board"></div>
+            <div id="status">Waiting for players...</div>
+        </div>
+        <div id="chat">
+            <div id="log"></div>
+            <form id="form">
+                <input type="submit" value="Send" />
+                <input type="text" id="msg_form" size="64" autofocus />
+            </form>
+        </div>
+    </div>
+
+    <div id="usernamePopup" class="popup">
+        <span class="close" onclick="closePopup()">&times;</span>
+        <form id="usernameForm">
+            <label for="usernameInput">Enter a username:</label><br />
+            <input type="text" id="usernameInput" required /><br /><br />
+            <input type="submit" value="Join Chat" />
+        </form>
+    </div>
+
+    <script>
+        let conn; // websocket connection
+        let msg_form = null;
+        let log = null;
+        let username = null;
+
+        // game info
+        let gameStarted = false;
+        let isPlayerTurn = true;
+        let playerSymbol = "X";
+        let boardState = Array(9).fill("");
+
+        function appendLog(item) {
+            const doScroll = log.scrollTop > log.scrollHeight - log.clientHeight - 1;
+            log.appendChild(item);
+            if (doScroll) {
+                log.scrollTop = log.scrollHeight - log.clientHeight;
+            }
+        }
+
+        // Username popup form //
+        function showPopup() {
+            const popup = document.getElementById("usernamePopup");
+            popup.style.display = "block";
+            document.getElementById("usernameInput").focus();
+        }
+
+        function closePopup() {
+            document.getElementById("usernamePopup").style.display = "none";
+            msg_form.focus();
+        }
+
+        function showUserConnected() {
+            const item = document.createElement("div");
+            item.innerHTML = "<b>" + username + " connected.</b>";
             appendLog(item);
-        };
-        conn.onmessage = function (evt) {
-            var messages = evt.data.split('\n');
-            for (var i = 0; i < messages.length; i++) {
-                var item = document.createElement("div");
-                item.innerText = messages[i];
+        }
+
+        // Tic-Tac-Toe functions //
+        function createBoard() {
+            const board = document.getElementById("board");
+            board.innerHTML = "";
+            boardState = Array(9).fill("");
+            for (let i = 0; i < 9; i++) {
+                const cell = document.createElement("div");
+                cell.className = "cell";
+                cell.dataset.index = i;
+                cell.onclick = () => handleCellClick(i);
+                board.appendChild(cell);
+            }
+            updateStatus("Waiting for another player...");
+        }
+
+        function handleCellClick(index) {
+            console.log("Handling cell click")
+            if (!isPlayerTurn || boardState[index] !== "") return;
+
+            console.log("Processing cell click")
+            boardState[index] = playerSymbol;
+            updateCell(index);
+            conn.send(JSON.stringify({
+                Type: "move",
+                Index: index,
+                Symbol: playerSymbol,
+                Username: username
+            }));
+
+            isPlayerTurn = false;
+            updateStatus("Waiting for opponent...");
+        }
+
+        function updateCell(index) {
+            console.log("Updating cell...")
+            const board = document.getElementById("board");
+            board.children[index].innerText = boardState[index];
+        }
+
+        function updateStatus(message) {
+            document.getElementById("status").innerText = message;
+        }
+
+        // Window function
+        window.onload = function () {
+            msg_form = document.getElementById("msg_form");
+            log = document.getElementById("log");
+
+            // input username form
+            document.getElementById("usernameForm").onsubmit = function (e) {
+                e.preventDefault();
+                const input = document.getElementById("usernameInput");
+                if (input.value.trim() === "") return;
+                username = input.value.trim();
+                closePopup();
+                showUserConnected();
+            };
+
+            // message form
+            document.getElementById("form").onsubmit = function () {
+                if (!conn || !msg_form.value || !username) return false;
+                conn.send(JSON.stringify({
+                    Type: "chat",
+                    ChatMessage: msg_form.value,
+                    Username: username
+                }));
+                msg_form.value = "";
+
+                return false;
+            };
+
+            if (window["WebSocket"]) {
+                conn = new WebSocket("ws://" + document.location.host + "/ws");
+                conn.onopen = function () {
+                    showPopup();
+                    createBoard();
+                };
+                conn.onclose = function () {
+                    const item = document.createElement("div");
+                    item.innerHTML = "<b>Connection closed.</b>";
+                    appendLog(item);
+                };
+
+                conn.onmessage = function (evt) {
+                    console.log("onmessage event: ", evt);
+                    try {
+                        const data = JSON.parse(evt.data);
+                        console.log(data)
+                        if (data.Type == "chat") {
+                            console.log("TYPE CHAT EXECUTED")
+                            const username = data.Username;
+                            const chatMessages = data.ChatMessage.split('\n');
+                            for (let i = 0; i < chatMessages.length; i++) {
+                                const item = document.createElement("div");
+                                item.innerText = username + ": " + chatMessages[i];
+                                appendLog(item);
+                            }
+                        }
+                        else {
+                            console.log("TYPE MOVE EXECUTED")   
+                        }
+                    } 
+                    catch (e) {
+                        // fallback: treat as chat -- message from server wasnt in JSON form
+                        console.log("FALLBACK: TREAT AS CHAT")
+                        const messages = evt.data.split('\n');
+                        for (let i = 0; i < messages.length; i++) {
+                            const item = document.createElement("div");
+                            item.innerText = messages[i];
+                            appendLog(item);
+                        }
+                    }
+                };
+            } 
+            else {
+                const item = document.createElement("div");
+                item.innerHTML = "<b>Your browser does not support WebSockets.</b>";
                 appendLog(item);
             }
         };
-    } else {
-        var item = document.createElement("div");
-        item.innerHTML = "<b>Your browser does not support WebSockets.</b>";
-        appendLog(item);
-    }
-};
-</script>
-<style type="text/css">
-html {
-    overflow: hidden;
-}
-
-body {
-    overflow: hidden;
-    padding: 0;
-    margin: 0;
-    width: 100%;
-    height: 100%;
-    background: gray;
-}
-
-#log {
-    background: white;
-    margin: 0;
-    padding: 0.5em 0.5em 0.5em 0.5em;
-    position: absolute;
-    top: 0.5em;
-    left: 0.5em;
-    right: 0.5em;
-    bottom: 3em;
-    overflow: auto;
-}
-
-#form {
-    padding: 0 0.5em 0 0.5em;
-    margin: 0;
-    position: absolute;
-    bottom: 1em;
-    left: 0px;
-    width: 100%;
-    overflow: hidden;
-}
-
-.popup {
-display: none; 
-position: fixed; 
-left: 50%; 
-top: 50%; 
-transform: translate(-50%, -50%); 
-background-color: white; 
-border: 1px solid #ccc; 
-z-index: 1000; 
-padding: 20px; 
-}
-.popup .close {
-cursor: pointer; 
-float: right; 
-}
-
-</style>
-</head>
-<body>
-<div id="log"></div>
-<div id="usernamePopup" class="popup">
-    <span class="close" onclick="closePopup()">&times;</span>
-    <form id="usernameForm">
-        <label for="usernameInput">Enter a username:</label><br />
-        <input type="text" id="usernameInput" required /><br /><br />
-        <input type="submit" value="Join Chat" />
-    </form>
-</div>
-<form id="form">
-    <input type="submit" value="Send" />
-    <input type="text" id="msg" size="64" autofocus />
-</form>
+    </script>
 </body>
 </html>
