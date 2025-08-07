@@ -1,3 +1,3 @@
 # Tic-Tac-Go
 
-Tic-Tac-Toe in Go with P2P connection
+Tic-Tac-Toe in Go with WebSocket connections
