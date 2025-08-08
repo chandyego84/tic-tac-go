@@ -7,20 +7,24 @@ type GameState struct {
 	PlayerTurn string
 }
 
-func (gs *GameState) updateCurrentPlayer(current string) string {
+func (gs *GameState) updateCurrentPlayer(current string) {
 	if (current == "X") {
-		return "O"
+		gs.PlayerTurn = "O"
+	} else {
+		gs.PlayerTurn = "X"
 	}
-	return "X"
+	
 }
 
 // Validate move
 func (gs *GameState) validateMove(moveIndex int) bool {
-	valid := true
+	return gs.GameOver && moveIndex < 0 && moveIndex > 8 && gs.Board[moveIndex] != ""
+}
 
-	if (gs.GameOver || moveIndex < 0 || moveIndex > 8 || gs.Board[moveIndex] != "") { valid = false }
-
-	return valid
+func (gs *GameState) updateBoard(moveIndex int) {
+    if gs.validateMove(moveIndex) {
+        gs.Board[moveIndex] = gs.PlayerTurn
+    }
 }
 
 // Check for win
@@ -40,7 +44,7 @@ func (gs *GameState) checkWin() bool {
 
 	// horizontals
 	for r := 0; r < 3; r++ {
-		row := b[3*r : 3*r+r]
+		row := b[3*r : 3*r+3]
 		if allEqual(row, p) {
 			return true
 		}
