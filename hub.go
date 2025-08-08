@@ -22,6 +22,8 @@ type Hub struct {
 
 	// Unregister requests from clients.
 	unregister chan *Client
+
+    GameState  *GameState
 }
 
 func newHub() *Hub {
@@ -30,6 +32,12 @@ func newHub() *Hub {
 		broadcast:  make(chan []byte),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
+		GameState: &GameState {
+			GameStarted: true,
+			GameWon: false,
+			Board: [9]string{},
+			PlayerTurn: "X",
+		},
 	}
 }
 
