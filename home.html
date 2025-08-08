@@ -133,8 +133,9 @@
 
         // game info
         let gameStarted = false;
+        let gameOver = false;
         let isPlayerTurn = true;
-        let playerSymbol = "X";
+        let playerSymbol = null;
         let boardState = Array(9).fill("");
 
         function appendLog(item) {
@@ -180,14 +181,11 @@
         }
 
         function handleCellClick(index) {
-            console.log("Handling cell click")
             if (!isPlayerTurn || boardState[index] !== "") return;
 
-            console.log("Processing cell click")
             conn.send(JSON.stringify({
                 Type: "game",
-                Index: index,
-                Symbol: playerSymbol,
+                MoveIndex: index,
                 Username: username
             }));
 
@@ -249,7 +247,6 @@
                     console.log("onmessage event: ", evt);
                     try {
                         const data = JSON.parse(evt.data);
-                        // console.log(data)
                         const username = data.Username;
                         
                         if (data.Type == "chat") {
@@ -261,7 +258,15 @@
                             }
                         }
                         else if (data.Type == "game") {
-                            updateCell(data.Index, data.Symbol);   
+                            // get game state info from hub
+                            console.log("received game info from hub")
+                            console.log(data.GameState)
+
+                            // Update local board state from server state
+                            boardState = data.GameState.Board;
+                            for (let i = 0; i < boardState.length; i++) {
+                                updateCell(i, boardState[i]);
+                            }
                         }
                     } 
                     catch (e) {

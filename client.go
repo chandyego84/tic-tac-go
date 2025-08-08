@@ -75,9 +75,9 @@ type Message struct {
 
 	ChatMessage string // chat message
 
-	Index int // move index (0-8)
+	MoveIndex int // move index from player (0-8)
 
-	Symbol string // "X" or "O"
+	GameState *GameState
 }
 
 // MessageType in Message struct implements custom JSON unmarshal to receive non-MessageType types from client
@@ -153,6 +153,21 @@ func (c *Client) readPump() {
 		case Game:
 			// update the game state, broadcast gamestate
 			fmt.Println("client msg type == gameState")
+			fmt.Println(messageTypeName[clientMsg.Type])
+			moveIndex := clientMsg.MoveIndex
+
+			if !c.hub.GameState.GameStarted {
+				c.hub.GameState.GameStarted = true
+			}
+
+			if c.hub.GameState.validateMove(moveIndex) {
+				if !c.hub.GameState.GameOver {
+					c.hub.GameState.Step(moveIndex)
+					clientMsg.GameState = c.hub.GameState
+					out, _ := json.Marshal(clientMsg)
+					c.hub.broadcast <- out
+				}
+			}
 		}		
 	}
 }

@@ -33,10 +33,10 @@ func newHub() *Hub {
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		GameState: &GameState {
-			GameStarted: true,
-			GameWon: false,
+			GameStarted: false,
+			GameOver: false,
 			Board: [9]string{},
-			PlayerTurn: "X",
+			PlayerTurn: "",
 		},
 	}
 }

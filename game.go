@@ -7,28 +7,12 @@ type GameState struct {
 	PlayerTurn string
 }
 
-func allEqual(slice []string, player string) bool {
-		for _, v := range slice {
-			if v != player {
-				return false
-			}
-		} 
-
-		return true
-}
-
 // Check if a move is valid -- true if valid, false otherwise.
 func (gs *GameState) validateMove(moveIndex int) bool {
-	return !gs.GameOver && moveIndex >= 0 && moveIndex < 8 && gs.Board[moveIndex] == ""
+	return !gs.GameOver && moveIndex >= 0 && moveIndex < 9 && gs.Board[moveIndex] == ""
 }
 
-// Action step in game
-func (gs *GameState) step(moveIndex int, player string) {
-    if !gs.validateMove(moveIndex) {
-        return
-    }
-
-	gs.Board[moveIndex] = player
+func (gs *GameState) updateCurrentPlayer() {
 	if gs.PlayerTurn == "X" {
 		gs.PlayerTurn = "O"
 	} else {
@@ -36,23 +20,46 @@ func (gs *GameState) step(moveIndex int, player string) {
 	}
 }
 
+// Action on game is made
+func (gs *GameState) Step(moveIndex int) {
+	if !gs.validateMove(moveIndex) {
+        return
+    }
+
+	gs.Board[moveIndex] = gs.PlayerTurn
+	if gs.isOver() {
+		gs.GameOver = true
+		return
+	}
+
+	gs.updateCurrentPlayer()
+}
+
 func (gs *GameState) isOver() bool {
 	return gs.checkWin("X") || gs.checkWin("O") || gs.checkDraw()
 }
 
 func (gs *GameState) checkDraw() bool {
-	b := gs.Board 
-	for cell := 0; cell < len(b); cell++ {
-		if b[cell] == "" {
-			return false
-		}
-	}
-
-	return true
+    for _, cell := range gs.Board {
+        if cell == "" {
+            return false
+        }
+    }
+    return true
 }
 
 func (gs *GameState) checkWin(p string) bool {
 	b := gs.Board
+
+	allEqual := func(slice []string, player string) bool {
+		for _, v := range slice {
+			if v != player {
+				return false
+			}
+		} 
+
+		return true
+	}
 
 	// horizontals
 	for r := 0; r < 3; r++ {
