@@ -185,7 +185,7 @@
 
             console.log("Processing cell click")
             conn.send(JSON.stringify({
-                Type: "move",
+                Type: "game",
                 Index: index,
                 Symbol: playerSymbol,
                 Username: username
@@ -244,6 +244,7 @@
                     appendLog(item);
                 };
 
+                // message data from the server
                 conn.onmessage = function (evt) {
                     console.log("onmessage event: ", evt);
                     try {
@@ -259,7 +260,7 @@
                                 log.appendChild(item)
                             }
                         }
-                        else if (data.Type == "move") {
+                        else if (data.Type == "game") {
                             updateCell(data.Index, data.Symbol);   
                         }
                     } 

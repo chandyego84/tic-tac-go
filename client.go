@@ -6,9 +6,11 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -49,9 +51,25 @@ type Client struct {
 	send chan []byte
 }
 
-// Message contains information about the chat or pertinent game data from the client
+// Types of messages that are sent between client and hub
+type MessageType int 
+const (
+	Chat MessageType = iota
+	Game
+)
+var messageTypeName = map[MessageType]string {
+	Chat: "chat",
+	Game: "game",
+}
+
+// Overloaded string printing function
+func (mt MessageType) String() string {
+	return messageTypeName[mt]
+}
+
+// Message data relating to the chat/game which is transferred between client/server
 type Message struct {
-	Type string // "chat" or "move"
+	Type MessageType // "chat" or "game"
 
 	Username string // client username
 
@@ -62,6 +80,37 @@ type Message struct {
 	Symbol string // "X" or "O"
 }
 
+// MessageType in Message struct implements custom JSON unmarshal to receive non-MessageType types from client
+	// e.g., client (browser) sends {Type: "game"} where "game" is of type <string>
+	// Converts <string> "game" to <MessageType> Game
+func (mt *MessageType) UnmarshalJSON(b []byte) error {
+	var t string // value of data
+    if err := json.Unmarshal(b, &t); err != nil {
+        return err
+    }
+
+	switch strings.ToLower(t) {
+	case "chat": *mt = Chat
+	case "game": *mt = Game
+	default: return errors.New("could not unmarshal MessageType -- type received was invalid")
+	}
+
+	return nil 
+}
+
+// Similar to custom UnmarshalJSON for JSON field 'MessageType'
+	// e.g., server has Message with Type: MessageType. Converts Type to string for client-side to be able to parse.
+func (mt MessageType) MarshalJSON() ([]byte, error) {
+	var t string
+	switch mt {
+	case Chat: t = "chat"
+	case Game: t = "game"
+	default: t = "unknown"
+	}
+
+	return json.Marshal(t)
+}
+ 
 // readPump reads messages from the client and sends them to the hub
 //
 // The application runs readPump in a per-connection goroutine. The application
@@ -88,16 +137,23 @@ func (c *Client) readPump() {
 		}
 
 		// parse message from the client
-        var msg Message
-		err = json.Unmarshal(message, &msg)
+        var clientMsg Message
+		err = json.Unmarshal(message, &clientMsg)
 		if err != nil {
 			fmt.Println("JSON unmarshal error:", err)
-		} else if msg.Type == "" {
-			fmt.Println("Message type is empty")
+			continue
 		}
-
-		out, _ := json.Marshal(msg)
-		c.hub.broadcast <- out
+		
+		switch (clientMsg.Type) {
+		case Chat:
+			// broadcast chat message
+			fmt.Println("client msg type == chat")
+			out, _ := json.Marshal(clientMsg)
+			c.hub.broadcast <- out
+		case Game:
+			// update the game state, broadcast gamestate
+			fmt.Println("client msg type == gameState")
+		}		
 	}
 }
 
