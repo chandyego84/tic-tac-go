@@ -35,6 +35,7 @@ func newHub() *Hub {
 		GameState: &GameState {
 			GameStarted: false,
 			GameOver: false,
+			PlayersConnected: 0,
 			Board: [9]string{},
 			PlayerTurn: "",
 		},
@@ -49,6 +50,10 @@ func (h *Hub) run() {
 		select {
 			case client := <-h.register:
 				h.clients[client] = true
+				if (client.role != "") {
+					addPlayer := true
+					client.updatePlayerCount(addPlayer)
+				}
 				fmt.Printf("New client connected. Total clients: %d\n", len(h.clients))
 
 			case client := <-h.unregister:

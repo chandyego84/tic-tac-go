@@ -49,6 +49,8 @@ type Client struct {
 
 	// Buffered channel of outbound messages to clients.
 	send chan []byte
+
+	role string
 }
 
 // Types of messages that are sent between client and hub
@@ -110,6 +112,27 @@ func (mt MessageType) MarshalJSON() ([]byte, error) {
 
 	return json.Marshal(t)
 }
+
+// Assign a connected client a role based on when they connected compared to other clients
+func (c *Client) assignRole(numClients int) {
+	switch numClients {
+		case 1: {
+			c.role = "X"
+		}
+		case 2: {
+			c.role = "O"
+		} 
+		default: c.role = ""
+	}
+}
+
+func (c *Client) updatePlayerCount(addPlayerCount bool) {
+	if (addPlayerCount) {
+		c.hub.GameState.PlayersConnected += 1
+	} else {
+		c.hub.GameState.PlayersConnected -= 1
+	}
+}
  
 // readPump reads messages from the client and sends them to the hub
 //
@@ -153,20 +176,19 @@ func (c *Client) readPump() {
 		case Game:
 			// update the game state, broadcast gamestate
 			fmt.Println("client msg type == gameState")
-			fmt.Println(messageTypeName[clientMsg.Type])
 			moveIndex := clientMsg.MoveIndex
 
-			if !c.hub.GameState.GameStarted {
+			if !c.hub.GameState.GameStarted && c.hub.GameState.PlayersConnected == 2 {
 				c.hub.GameState.GameStarted = true
 			}
 
-			if c.hub.GameState.validateMove(moveIndex) {
-				if !c.hub.GameState.GameOver {
+			if c.hub.GameState.GameStarted && !c.hub.GameState.GameOver {
+				if c.hub.GameState.validateMove(moveIndex) {
 					c.hub.GameState.Step(moveIndex)
-					clientMsg.GameState = c.hub.GameState
-					out, _ := json.Marshal(clientMsg)
-					c.hub.broadcast <- out
 				}
+				clientMsg.GameState = c.hub.GameState
+				out, _ := json.Marshal(clientMsg)
+				c.hub.broadcast <- out
 			}
 		}		
 	}
@@ -249,6 +271,12 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 
 	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256)}
 	client.hub.register <- client 
+
+	if client.hub.clients[client] {
+		// client was registered successfully
+		numClients := len(client.hub.clients)
+		client.assignRole(numClients)	
+	}
 
 	// Allow collection of memory referenced by the caller by doing all work in
 	// new goroutines.
