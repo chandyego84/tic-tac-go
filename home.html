@@ -30,6 +30,12 @@
             margin-top: 0;
         }
 
+        .system-message {
+            color: green;
+            font-style: italic;
+            margin: 5px 0;
+        }
+
         #chat {
             width: 60%;
             display: flex;
@@ -134,8 +140,8 @@
         // game info
         let gameStarted = false;
         let gameOver = false;
-        let isPlayerTurn = true;
-        let playerSymbol = null;
+        let isPlayerTurn = false;
+        let playerSymbol = "";
         let boardState = Array(9).fill("");
 
         function appendLog(item) {
@@ -158,11 +164,13 @@
             msg_form.focus();
         }
         
-        // only client who joined can see this connection confirmation
-        function showUserConnected() {
-            const item = document.createElement("div");
-            item.innerHTML = "<b>" + username + " connected.</b>";
-            appendLog(item);
+        // System messages from server
+        function showSystemMessage(text) {
+            const sysMsg = document.createElement("div");
+            sysMsg.className = "system-message"; // style in CSS
+            sysMsg.textContent = text;
+            log.appendChild(sysMsg);
+            log.scrollTop = log.scrollHeight;
         }
 
         // Tic-Tac-Toe functions //
@@ -177,7 +185,6 @@
                 cell.onclick = () => handleCellClick(i);
                 board.appendChild(cell);
             }
-            updateStatus("Waiting for another player...");
         }
 
         function handleCellClick(index) {
@@ -188,9 +195,6 @@
                 MoveIndex: index,
                 Username: username
             }));
-
-            isPlayerTurn = false;
-            updateStatus("Waiting for opponent...");
         }
 
         function updateCell(index, symbol) {
@@ -212,9 +216,14 @@
                 e.preventDefault();
                 const input = document.getElementById("usernameInput");
                 if (input.value.trim() === "") return;
+
                 username = input.value.trim();
+                conn.send(JSON.stringify({
+                    Type: "connection",
+                    Username: username
+                }));
+
                 closePopup();
-                showUserConnected();
             };
 
             // message form
@@ -247,13 +256,19 @@
                     console.log("onmessage event: ", evt);
                     try {
                         const data = JSON.parse(evt.data);
-                        const username = data.Username;
-                        
-                        if (data.Type == "chat") {
+                        const msgUsername = data.Username; 
+
+                        if (data.Type == "connection") {
+                            if (msgUsername === username) {
+                                playerSymbol = data.Role;
+                                playerSymbol != "" ? showSystemMessage(`You are assigned a player with symbol ${playerSymbol}`) : showSystemMessage("You are a spectator")
+                            }
+                        }
+                        else if (data.Type == "chat") {
                             const chatMessages = data.ChatMessage.split('\n');
                             for (let i = 0; i < chatMessages.length; i++) {
                                 const item = document.createElement("div");
-                                item.innerText = username + ": " + chatMessages[i];
+                                item.innerText = msgUsername + ": " + chatMessages[i];
                                 log.appendChild(item)
                             }
                         }
@@ -261,6 +276,7 @@
                             // get game state info from hub
                             console.log("received game info from hub")
                             console.log(data.GameState)
+                            
 
                             // Update local board state from server state
                             boardState = data.GameState.Board;

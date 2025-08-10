@@ -5,6 +5,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 )
 
@@ -42,6 +43,26 @@ func newHub() *Hub {
 	}
 }
 
+// Assign a connected client a role based on number of players connected
+// First two clients to connect are players
+func (h *Hub) assignRole(c *Client) {
+	switch h.GameState.PlayersConnected {
+		case 0: {
+			fmt.Println("assigning role X")
+			c.role = "X"
+		}
+		case 1: {
+			fmt.Println("assigning role O")
+			c.role = "O"
+		} 
+		default: c.role = ""
+	}
+}
+
+func (c *Client) updateClientRegisterStatus(isRegistered bool) {
+	c.registered = isRegistered
+}
+
 /*
 (Goroutine) Waits on multiple communication operations (channels)
 */
@@ -50,11 +71,21 @@ func (h *Hub) run() {
 		select {
 			case client := <-h.register:
 				h.clients[client] = true
-				if (client.role != "") {
-					addPlayer := true
-					client.updatePlayerCount(addPlayer)
+				client.updateClientRegisterStatus(true)
+				
+				h.assignRole(client)
+				if client.role != "" {
+					addToPlayerCount := true
+					h.GameState.updatePlayerCount(addToPlayerCount)
 				}
-				fmt.Printf("New client connected. Total clients: %d\n", len(h.clients))
+
+				confirm := Message{
+                    Type: Connection,
+					Username: client.username,
+					Role: client.role,
+                }
+                out, _ := json.Marshal(confirm)
+				client.send <- out // send to just this client
 
 			case client := <-h.unregister:
 				if _, ok := h.clients[client]; ok {

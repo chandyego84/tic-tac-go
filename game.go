@@ -3,14 +3,11 @@ package main
 type GameState struct {
 	GameStarted bool
 	GameOver bool
+	PlayersConnected int
 	Board [9]string
 	PlayerTurn string
 }
 
-// Check if a move is valid -- true if valid, false otherwise.
-func (gs *GameState) validateMove(moveIndex int) bool {
-	return !gs.GameOver && moveIndex >= 0 && moveIndex < 9 && gs.Board[moveIndex] == ""
-}
 
 func (gs *GameState) updateCurrentPlayer() {
 	if gs.PlayerTurn == "X" {
@@ -20,12 +17,21 @@ func (gs *GameState) updateCurrentPlayer() {
 	}
 }
 
+func (gs *GameState) updatePlayerCount(addToPlayerCount bool) {
+	if (addToPlayerCount) {
+		gs.PlayersConnected += 1
+	} else {
+		gs.PlayersConnected -= 1
+	}
+}
+
+// Check if a move is valid -- true if valid, false otherwise.
+func (gs *GameState) validateMove(moveIndex int) bool {
+	return !gs.GameOver && moveIndex >= 0 && moveIndex < 9 && gs.Board[moveIndex] == ""
+}
+
 // Action on game is made
 func (gs *GameState) Step(moveIndex int) {
-	if !gs.validateMove(moveIndex) {
-        return
-    }
-
 	gs.Board[moveIndex] = gs.PlayerTurn
 	if gs.isOver() {
 		gs.GameOver = true

@@ -50,6 +50,10 @@ type Client struct {
 	// Buffered channel of outbound messages to clients.
 	send chan []byte
 
+	registered bool
+
+	username string
+
 	role string
 }
 
@@ -58,10 +62,12 @@ type MessageType int
 const (
 	Chat MessageType = iota
 	Game
+	Connection
 )
 var messageTypeName = map[MessageType]string {
 	Chat: "chat",
 	Game: "game",
+	Connection: "connection",
 }
 
 // Overloaded string printing function
@@ -71,14 +77,14 @@ func (mt MessageType) String() string {
 
 // Message data relating to the chat/game which is transferred between client/server
 type Message struct {
-	Type MessageType // "chat" or "game"
+	Type MessageType // "chat", "game", "connection"
 
 	Username string // client username
+	Role     string // client role, e.g., "X", "O", or ""
 
 	ChatMessage string // chat message
 
 	MoveIndex int // move index from player (0-8)
-
 	GameState *GameState
 }
 
@@ -94,6 +100,7 @@ func (mt *MessageType) UnmarshalJSON(b []byte) error {
 	switch strings.ToLower(t) {
 	case "chat": *mt = Chat
 	case "game": *mt = Game
+	case "connection": *mt = Connection
 	default: return errors.New("could not unmarshal MessageType -- type received was invalid")
 	}
 
@@ -107,33 +114,13 @@ func (mt MessageType) MarshalJSON() ([]byte, error) {
 	switch mt {
 	case Chat: t = "chat"
 	case Game: t = "game"
+	case Connection: t = "connection"
 	default: t = "unknown"
 	}
 
 	return json.Marshal(t)
 }
 
-// Assign a connected client a role based on when they connected compared to other clients
-func (c *Client) assignRole(numClients int) {
-	switch numClients {
-		case 1: {
-			c.role = "X"
-		}
-		case 2: {
-			c.role = "O"
-		} 
-		default: c.role = ""
-	}
-}
-
-func (c *Client) updatePlayerCount(addPlayerCount bool) {
-	if (addPlayerCount) {
-		c.hub.GameState.PlayersConnected += 1
-	} else {
-		c.hub.GameState.PlayersConnected -= 1
-	}
-}
- 
 // readPump reads messages from the client and sends them to the hub
 //
 // The application runs readPump in a per-connection goroutine. The application
@@ -148,7 +135,7 @@ func (c *Client) readPump() {
 	c.conn.SetReadLimit(maxMessageSize)
 	c.conn.SetReadDeadline(time.Now().Add(pongWait)) // set on connection start
 	c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil }) // set every time a pong received
-	
+
 	for {
 		// obtain message data from client
 		_, message, err := c.conn.ReadMessage()
@@ -168,11 +155,18 @@ func (c *Client) readPump() {
 		}
 		
 		switch (clientMsg.Type) {
+		case Connection:
+            if !c.registered && strings.TrimSpace(clientMsg.Username) != "" {
+                c.username = clientMsg.Username
+				c.hub.register <- c
+            }
+
 		case Chat:
 			// broadcast chat message
-			fmt.Println("client msg type == chat")
-			out, _ := json.Marshal(clientMsg)
-			c.hub.broadcast <- out
+            if c.registered {
+                out, _ := json.Marshal(clientMsg)
+                c.hub.broadcast <- out
+            }
 		case Game:
 			// update the game state, broadcast gamestate
 			fmt.Println("client msg type == gameState")
@@ -262,6 +256,7 @@ func (c *Client) writePump() {
 }
 
 // serveWs handles websocket requests from the peer.
+// does not register client here -- must have a username entered properly from client-side/browser first
 func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -269,14 +264,7 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256)}
-	client.hub.register <- client 
-
-	if client.hub.clients[client] {
-		// client was registered successfully
-		numClients := len(client.hub.clients)
-		client.assignRole(numClients)	
-	}
+	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256), registered: false}
 
 	// Allow collection of memory referenced by the caller by doing all work in
 	// new goroutines.
