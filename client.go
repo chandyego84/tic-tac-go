@@ -169,7 +169,6 @@ func (c *Client) readPump() {
             }
 		case Game:
 			// update the game state, broadcast gamestate
-			fmt.Println("client msg type == gameState")
 			moveIndex := clientMsg.MoveIndex
 
 			if !c.hub.GameState.GameStarted && c.hub.GameState.PlayersConnected == 2 {

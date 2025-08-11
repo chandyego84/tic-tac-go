@@ -8,6 +8,15 @@ type GameState struct {
 	PlayerTurn string
 }
 
+func (gs *GameState) reset() {
+    gs.PlayerTurn = "X"
+    for i := range gs.Board {
+        gs.Board[i] = ""
+    }
+    gs.GameOver = false
+    gs.GameStarted = true
+}
+
 
 func (gs *GameState) updateCurrentPlayer() {
 	if gs.PlayerTurn == "X" {

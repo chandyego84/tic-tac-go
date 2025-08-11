@@ -140,8 +140,9 @@
         // game info
         let gameStarted = false;
         let gameOver = false;
-        let isPlayerTurn = false;
+        let currentTurn = ""
         let playerSymbol = "";
+        let isPlayerTurn = false;
         let boardState = Array(9).fill("");
 
         function appendLog(item) {
@@ -187,8 +188,9 @@
             }
         }
 
-        function handleCellClick(index) {
-            if (!isPlayerTurn || boardState[index] !== "") return;
+        function handleCellClick(index) {            
+            if (!isPlayerTurn || boardState[index] !== "" || gameOver) return;
+            console.log("handling cell click!")
 
             conn.send(JSON.stringify({
                 Type: "game",
@@ -196,6 +198,43 @@
                 Username: username
             }));
         }
+
+        function updateFromGameState(gs) {
+            gameStarted = gs.GameStarted;
+            gameOver = gs.GameOver;
+            boardState = gs.Board;
+            currentTurn = gs.PlayerTurn;
+
+            // update UI cells
+            for (let i = 0; i < boardState.length; i++) {
+                updateCell(i, boardState[i]);
+            }
+
+            // update isPlayerTurn
+            isPlayerTurn = (playerSymbol !== "" && playerSymbol === currentTurn && !gameOver);
+
+            // status text
+            if (!gameStarted) {
+                updateStatus("Waiting for players...");
+            } 
+            else if (gameOver) {
+                if (gs.checkWin && typeof gs.checkWin === "string") {
+                    updateStatus(`Game Over! Winner: ${gs.checkWin}`);
+                } else if (boardState.every(cell => cell !== "")) {
+                    updateStatus("Game Over! It's a draw.");
+                } else {
+                    updateStatus("Game Over!");
+                }
+            } 
+            else {
+                if (isPlayerTurn) {
+                    updateStatus(`Your turn (${playerSymbol})`);
+                } else {
+                    updateStatus(`Opponent's turn (${currentTurn})`);
+                }
+            }
+        }
+
 
         function updateCell(index, symbol) {
             const board = document.getElementById("board");
@@ -261,7 +300,14 @@
                         if (data.Type == "connection") {
                             if (msgUsername === username) {
                                 playerSymbol = data.Role;
-                                playerSymbol != "" ? showSystemMessage(`You are assigned a player with symbol ${playerSymbol}`) : showSystemMessage("You are a spectator")
+                                if (playerSymbol != "") {
+                                    showSystemMessage(`You are assigned a player with symbol ${playerSymbol}`);
+                                } else {
+                                    showSystemMessage("You are a spectator");
+                                }
+                            }
+                            if (data.GameState) {
+                                updateFromGameState(data.GameState);
                             }
                         }
                         else if (data.Type == "chat") {
@@ -273,21 +319,14 @@
                             }
                         }
                         else if (data.Type == "game") {
-                            // get game state info from hub
-                            console.log("received game info from hub")
-                            console.log(data.GameState)
-                            
-
-                            // Update local board state from server state
-                            boardState = data.GameState.Board;
-                            for (let i = 0; i < boardState.length; i++) {
-                                updateCell(i, boardState[i]);
+                            if (data.GameState) {
+                                updateFromGameState(data.GameState);
                             }
                         }
                     } 
                     catch (e) {
                         // fallback: treat as chat -- message from server wasnt in JSON form
-                        console.log("FALLBACK: TREAT AS CHAT")
+                        console.log(`Error receiving data from server: ${e}`)
                         const messages = evt.data.split('\n');
                         for (let i = 0; i < messages.length; i++) {
                             const item = document.createElement("div");

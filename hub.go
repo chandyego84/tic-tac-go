@@ -6,7 +6,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 )
 
 // Hub maintains the set of active clients and broadcasts messages to the
@@ -38,7 +37,7 @@ func newHub() *Hub {
 			GameOver: false,
 			PlayersConnected: 0,
 			Board: [9]string{},
-			PlayerTurn: "",
+			PlayerTurn: "X",
 		},
 	}
 }
@@ -48,11 +47,9 @@ func newHub() *Hub {
 func (h *Hub) assignRole(c *Client) {
 	switch h.GameState.PlayersConnected {
 		case 0: {
-			fmt.Println("assigning role X")
 			c.role = "X"
 		}
 		case 1: {
-			fmt.Println("assigning role O")
 			c.role = "O"
 		} 
 		default: c.role = ""
@@ -79,13 +76,16 @@ func (h *Hub) run() {
 					h.GameState.updatePlayerCount(addToPlayerCount)
 				}
 
+				// send role confirmation to client along with game state
 				confirm := Message{
                     Type: Connection,
 					Username: client.username,
 					Role: client.role,
+					GameState: h.GameState,
                 }
+
                 out, _ := json.Marshal(confirm)
-				client.send <- out // send to just this client
+				client.send <- out
 
 			case client := <-h.unregister:
 				if _, ok := h.clients[client]; ok {
