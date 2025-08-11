@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: tictacgo-service
+  annotations:
+    service.beta.kubernetes.io/azure-load-balancer-ipv4: "4.155.219.249"  
+spec:
+  type: LoadBalancer
+  selector:
+    app: tictacgo
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8080
