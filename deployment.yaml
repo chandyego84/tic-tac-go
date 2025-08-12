@@ -14,6 +14,6 @@ spec:
     spec:
       containers:
       - name: tictacgo
-        image: noobchandyacr.azurecr.io/tictacgo
+        image: noobchandyacr.azurecr.io/tictacgo:v1
         ports:
         - containerPort: 8080
