@@ -319,6 +319,7 @@
                             }
                         }
                         else if (data.Type == "game") {
+                            console.log("game update from server")
                             if (data.GameState) {
                                 updateFromGameState(data.GameState);
                             }

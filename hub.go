@@ -24,12 +24,14 @@ type Hub struct {
 	unregister chan *Client
 
     GameState  *GameState
+
+	assignedRoles map[string]*Client  // track role to client mapping, keys: "X", "O"
 }
 
 func newHub() *Hub {
 	return &Hub{
 		clients:    make(map[*Client]bool),
-		broadcast:  make(chan []byte),
+		broadcast: make(chan []byte, 256),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		GameState: &GameState {
@@ -39,21 +41,24 @@ func newHub() *Hub {
 			Board: [9]string{},
 			PlayerTurn: "X",
 		},
+        assignedRoles: make(map[string]*Client),
 	}
 }
 
-// Assign a connected client a role based on number of players connected
-// First two clients to connect are players
+// Assign a connected client a role baased on available roles
 func (h *Hub) assignRole(c *Client) {
-	switch h.GameState.PlayersConnected {
-		case 0: {
-			c.role = "X"
-		}
-		case 1: {
-			c.role = "O"
-		} 
-		default: c.role = ""
-	}
+    if _, taken := h.assignedRoles["X"]; !taken {
+        c.role = "X"
+        h.assignedRoles["X"] = c
+        return
+    }
+    if _, taken := h.assignedRoles["O"]; !taken {
+        c.role = "O"
+        h.assignedRoles["O"] = c
+        return
+    }
+    // otherwise, spectator
+    c.role = ""
 }
 
 func (c *Client) updateClientRegisterStatus(isRegistered bool) {
@@ -72,8 +77,8 @@ func (h *Hub) run() {
 				
 				h.assignRole(client)
 				if client.role != "" {
-					addToPlayerCount := true
-					h.GameState.updatePlayerCount(addToPlayerCount)
+					incPlayerCount := true
+					h.GameState.updatePlayerCount(incPlayerCount)
 				}
 
 				// send role confirmation to client along with game state
@@ -92,12 +97,40 @@ func (h *Hub) run() {
 					delete(h.clients, client)
 					close(client.send)
 				}
+
+				// Free player's role if assigned
+				if client.role == "X" || client.role == "O" {
+					delete(h.assignedRoles, client.role)
+					h.GameState.updatePlayerCount(false)
+					client.role = ""
+				}
+
+				// reset game if player count < 2 and game started
+				if h.GameState.PlayersConnected < 2 && h.GameState.GameStarted {
+					h.GameState.GameStarted = false
+					h.GameState.GameOver = false
+					h.GameState.Board = [9]string{}
+					h.GameState.PlayerTurn = "X"
+				}
+
+				confirm := Message{
+                    Type: Game,
+					GameState: h.GameState,
+                }
+
+				out, _ := json.Marshal(confirm)
+
+
+				
+				h.broadcast <- out // goes here, but it doesnt enter the broadcast channel
 				
 			case message := <-h.broadcast:
 				for client := range h.clients {
 					select {
 					case client.send <- message:
+
 					default:
+						
 						close(client.send)
 						delete(h.clients, client)
 					}

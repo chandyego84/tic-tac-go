@@ -26,11 +26,13 @@ func (gs *GameState) updateCurrentPlayer() {
 	}
 }
 
-func (gs *GameState) updatePlayerCount(addToPlayerCount bool) {
-	if (addToPlayerCount) {
+func (gs *GameState) updatePlayerCount(increment bool) {
+	if (increment) {
 		gs.PlayersConnected += 1
 	} else {
-		gs.PlayersConnected -= 1
+		if gs.PlayersConnected > 0 {
+			gs.PlayersConnected -= 1
+		}
 	}
 }
 
