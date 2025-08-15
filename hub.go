@@ -98,8 +98,8 @@ func (h *Hub) run() {
 					close(client.send)
 				}
 
-				// Free player's role if assigned
 				if client.role == "X" || client.role == "O" {
+					// free disconnected player's role
 					delete(h.assignedRoles, client.role)
 					h.GameState.updatePlayerCount(false)
 					client.role = ""
@@ -113,16 +113,14 @@ func (h *Hub) run() {
 					h.GameState.PlayerTurn = "X"
 				}
 
+				// send game update to clients due to disconnection
 				confirm := Message{
                     Type: Game,
 					GameState: h.GameState,
                 }
 
 				out, _ := json.Marshal(confirm)
-
-
-				
-				h.broadcast <- out // goes here, but it doesnt enter the broadcast channel
+				h.broadcast <- out
 				
 			case message := <-h.broadcast:
 				for client := range h.clients {
