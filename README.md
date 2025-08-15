@@ -22,9 +22,11 @@ The goal is for Noob-Tac-Go/Tic-Tac-Go the #1 browser game.
 ## Role Assignment / Who Gets to Play
 There is one server. First-come-first-serve basis. If you're one of the first two to enter, you can play. Otherwise, you are just a spectator, but you can still participate in chat. If a player disconnects, the game is restarted, and the next connected client replaces that player--yes, this is a terrible solution, but I wanted something up and running ASAP.
 
-## Access the App
+## ~~Access the App~~ 
 Open a web browser and navigate to:  
-[http://tictacgoapp.westus2.cloudapp.azure.com/](http://tictacgoapp.westus2.cloudapp.azure.com/)
+~~[http://tictacgoapp.westus2.cloudapp.azure.com/](http://tictacgoapp.westus2.cloudapp.azure.com/)~~
+
+⚠️**The web app no longer exists. It costs money.**
 * Get a friend to join you (or open another tab), and pray you are both players because there's just so many people trying to access the server to be the best Noob-Tac-Go player.
 
 ## OR Run Locally
